@@ -1,12 +1,13 @@
 <section id="viewLogin">
   <h2>Login:</h2>
-  <form id="formLogin">
+  <form id="formLogin" method="post" action="/auth/login" >
     <label for="username">Username:</label>
     <input
       type="text"
       id="username"
-      name="username"
+      name="email"
       placeholder="Enter your Username"
+      value="{{body.email}}"
     />
     <label for="password">Password:</label>
     <input
