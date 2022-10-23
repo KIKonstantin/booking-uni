@@ -1,8 +1,20 @@
+const { create, getById, update, deleteById, bookRoom } = require("../services/hotelService");
+const { parseError } = require("../util/parser");
+
 const hotelController = require("express").Router();
 
-hotelController.get("/:id/details", (req, res) => {
+hotelController.get("/:id/details", async(req, res) => {
+    const hotel = await getById(req.params.id);
+
+    if (hotel.owner == req.user._id) {
+        hotel.isOwner = true;
+    } else if (hotel.bookings.map(b => b.toString()).includes(req.user._id.toString())) {
+        hotel.isBooked = true;
+    }
+
     res.render("details", {
         title: "Hotel Details",
+        hotel
     });
 });
 
@@ -12,10 +24,110 @@ hotelController.get("/create", (req, res) => {
     });
 });
 
-hotelController.get("/:id/edit", (req, res) => {
+hotelController.post('/create', async(req, res) => {
+    const hotel = {
+        name: req.body.name,
+        city: req.body.city,
+        imageUrl: req.body.imageUrl,
+        rooms: req.body.rooms,
+        owner: req.user._id,
+    };
+
+
+
+    try {
+        if (Object.values(hotel).some(v => !v)) {
+            throw new Error('All fields are required');
+        }
+        await create(hotel);
+        res.redirect('/');
+    } catch (err) {
+        res.render('create', {
+            title: 'Create Hotel',
+            body: hotel,
+            errors: parseError(err)
+        });
+    }
+});
+
+hotelController.get("/:id/edit", async(req, res) => {
+    const hotel = await getById(req.params.id);
+    if (hotel.owner != req.user._id) {
+        return res.redirect('/auth/login');
+    }
+
     res.render("edit", {
         title: "Edit Hotel",
+        hotel
     });
+});
+
+hotelController.post("/:id/edit", async(req, res) => {
+    const hotel = await getById(req.params.id);
+
+    if (hotel.owner != req.body._id) {
+        return res.redirect('/auth/login');
+    }
+
+    const edited = {
+        name: req.body.name,
+        city: req.body.city,
+        imageUrl: req.body.imageUrl,
+        rooms: req.body.rooms,
+        owner: req.user._id,
+    };
+
+    try {
+
+        if (Object.values(edited).some(v => !v)) {
+            throw new Error('All fields are required');
+        }
+
+        await update(req.params.id, edited);
+        res.redirect(`/hotel/${req.params.id}/details`);
+
+    } catch (err) {
+        res.render("edit", {
+            title: "Edit Hotel",
+            hotel: Object.assign(edited, { _id: req.body.id }),
+            errors: parseError(err)
+        });
+    }
+
+});
+
+
+hotelController.get("/:id/delete", async(req, res) => {
+    const hotel = await getById(req.params.id);
+
+    if (hotel.owner != req.user._id) {
+        return res.redirect('/auth/login');
+    }
+
+    await deleteById(req.params.id);
+    res.redirect('/');
+});
+
+hotelController.get("/:id/book", async(req, res) => {
+    const hotelId = req.params.id;
+    const userId = req.user._id;
+    const hotel = await getById(hotelId);
+    try {
+        if (hotel.owner == userId) {
+            hotel.isOwner = true;
+            throw new Error('Cannot Book at your own hotel');
+        }
+        await bookRoom(hotelId, userId);
+        res.redirect(`/hotel/${hotelId}/details`);
+
+    } catch (err) {
+        res.render('details', {
+            title: 'Hotel Details',
+            hotel,
+            errors: parseError(err)
+        })
+    }
+
 });
 
 module.exports = hotelController;
